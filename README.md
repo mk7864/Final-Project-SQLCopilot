@@ -2,7 +2,7 @@
 
 **Course:** NLP  
 **Semester:** Fall 2025  
-**Team:** Shaik Mohammad Mujahid Khalandar & Partner  
+**Team:** Shaik Mohammad Mujahid Khalandar & Ayush Meshram  
 
 ---
 

@@ -1,0 +1,14 @@
+id,question,sql,predicted_sql,exact_match
+1,Show all users.,SELECT * FROM users;,,0
+6,List every product name and its price.,"SELECT name, price FROM products;","Inscrire chaque nom, son prix, sa valeur, sa valeur, sa valeur;",0
+47,Show the product with the highest revenue.,"SELECT product_id, name, total_revenue FROM (SELECT p.product_id, p.name, SUM(o.quantity * p.price) AS total_revenue FROM orders o JOIN products p ON o.product_id = p.product_id GROUP BY p.product_id, p.name) AS t ORDER BY total_revenue DESC LIMIT 1;","SELECT product_id, name, price FROM products;",0
+32,Show the total revenue per user.,"SELECT u.user_id, u.name, SUM(o.quantity * p.price) AS total_revenue FROM users u JOIN orders o ON u.user_id = o.user_id JOIN products p ON o.product_id = p.product_id GROUP BY u.user_id, u.name;",,0
+14,Show orders placed after 2024-01-01.,"SELECT order_id, user_id, product_id, quantity, order_date FROM orders WHERE order_date > '2024-01-01';","SELECT order_id, name, price FROM orders placed after 2024-01-01-01;",0
+56,Show the average payment amount per payment method.,"SELECT payment_method, AVG(amount) AS avg_amount FROM payments GROUP BY payment_method;",,0
+35,List all products that have never been ordered.,"SELECT p.product_id, p.name FROM products p LEFT JOIN orders o ON p.product_id = o.product_id WHERE o.order_id IS NULL;","SELECT product_id, name, price FROM products;",0
+50,Show the average product price per category.,"SELECT category, AVG(price) AS avg_price FROM products GROUP BY category;",Indiquer le prix moyen du produit par catégorie;,0
+13,Show products that cost less than 20.,"SELECT product_id, name, price FROM products WHERE price < 20;",SELECT product_id__________________________________________________________________________________________________________,0
+41,Find users whose name starts with 'A'.,"SELECT user_id, name, email FROM users WHERE name LIKE 'A%';",http://www.users.com/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/names/,0
+34,Which users have never placed an order?,"SELECT u.user_id, u.name FROM users u LEFT JOIN orders o ON u.user_id = o.user_id WHERE o.order_id IS NULL;",,0
+60,Show products and how many different users ordered them.,"SELECT p.product_id, p.name, COUNT(DISTINCT o.user_id) AS num_users FROM products p JOIN orders o ON p.product_id = o.product_id GROUP BY p.product_id, p.name;",,0
+17,Show pending orders only.,"SELECT order_id, user_id, product_id, quantity, status FROM orders WHERE status = 'PENDING';",Anzeige pending orders;,0

@@ -1,0 +1,12 @@
+# Ignore Python cache
+__pycache__/
+
+# Ignore local models (large, not needed for grading)
+models/
+
+# Ignore generic cache files
+*.log
+
+# (Optional) Ignore temporary / backup files
+*.tmp
+*.bak

@@ -1,6 +1,6 @@
 # 🧠 SQL Copilot — Natural Language to SQL (Gemini Integrated)
 
-This project implements an interactive **SQL Copilot** powered by **Google Gemini** and **SQLite**  
+This project implements an interactive **SQL Copilot** powered by **Google Gemini** and **SQLite**
 to help users generate SQL queries **from natural language questions**.
 
 Users can:
@@ -25,4 +25,26 @@ Users can:
 ---
 
 ## 🛠️ Project Structure
+```text
+Final-Project-SQLCopilot/
+│
+├── Code/
+│   ├── app.py                      # Streamlit UI
+│   ├── main_sql_copilot.py         # NL → SQL logic (Gemini)
+│   ├── data_utils.py               # DB + schema utilities
+│   ├── sql_canonicalizer.py        # SQL normalization for evaluation
+│   ├── evaluate_fossil_nl2sql.py   # Benchmarking module
+│   ├── requirements.txt            # Dependencies
+│   └── uploaded_data.db            # Generated after uploading dataset
+│
+└── data/
+    └── nl2sql_full.csv             # Benchmark reference dataset
 
+## ⚙️ Installation
+
+Clone the repo:
+
+```bash
+git clone https://github.com/mk7864/Final-Project-SQLCopilot.git
+cd Final-Project-SQLCopilot/Code
+pip install -r requirements.txt

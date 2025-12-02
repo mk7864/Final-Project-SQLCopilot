@@ -59,3 +59,23 @@ streamlit run app.py
 cd Code
 python evaluate_fossil_nl2sql.py
 # This checks SQL accuracy using canonical SQL comparison
+
+---
+
+## 👥 Contributors
+
+| Name | Email |
+|------|-------|
+| Shaik Mohammad Mujahid Khalandar | ms791@gwmail.gwu.edu |
+| Ayush Meshram | a.meshram2@gwmail.gwu.edu |
+
+---
+
+## 🏫 Project Information
+
+Course: DATS 6312 — Natural Language Processing  
+Institution: The George Washington University  
+Semester: Fall 2025  
+Team: 2 Members  
+
+Instructor: Prof. Ning Rui

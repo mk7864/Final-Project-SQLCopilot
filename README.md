@@ -38,7 +38,7 @@ Final-Project-SQLCopilot/
 │   └── uploaded_data.db            # Generated after uploading dataset
 │
 └── data/
-    └── nl2sql_full.csv             # Benchmark dataset'''
+    └── nl2sql_full.csv             # Benchmark dataset
 
 # 👉 Installation
 git clone https://github.com/mk7864/Final-Project-SQLCopilot.git

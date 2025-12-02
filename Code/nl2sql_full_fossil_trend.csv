@@ -1,0 +1,31 @@
+id,question,sql
+1,List all rows in the dataset.,"SELECT country , year , share_fossil FROM uploaded_table"
+2,Show all distinct countries.,SELECT country FROM uploaded_table GROUP BY country
+3,Show all distinct years in the dataset.,SELECT year FROM uploaded_table GROUP BY year
+4,Show the average fossil share for each country.,"SELECT country , AVG(share_fossil) FROM uploaded_table GROUP BY country"
+5,Show the average fossil share for each year.,"SELECT year , AVG(share_fossil) FROM uploaded_table GROUP BY year"
+6,Show total fossil share sum for each country.,"SELECT country , SUM(share_fossil) FROM uploaded_table GROUP BY country"
+7,Show total fossil share sum for each year.,"SELECT year , SUM(share_fossil) FROM uploaded_table GROUP BY year"
+8,Show the maximum fossil share for each country.,"SELECT country , MAX(share_fossil) FROM uploaded_table GROUP BY country"
+9,Show the minimum fossil share for each country.,"SELECT country , MIN(share_fossil) FROM uploaded_table GROUP BY country"
+10,Show the maximum fossil share for each year.,"SELECT year , MAX(share_fossil) FROM uploaded_table GROUP BY year"
+11,Show the minimum fossil share for each year.,"SELECT year , MIN(share_fossil) FROM uploaded_table GROUP BY year"
+12,Show average fossil share for all countries combined.,SELECT AVG(share_fossil) FROM uploaded_table
+13,Show the number of rows for each country.,"SELECT country , COUNT(*) FROM uploaded_table GROUP BY country"
+14,Show the number of rows for each year.,"SELECT year , COUNT(*) FROM uploaded_table GROUP BY year"
+15,Show average fossil share for the year 2000.,SELECT AVG(share_fossil) FROM uploaded_table WHERE year = 2000
+16,Show average fossil share for the year 1990.,SELECT AVG(share_fossil) FROM uploaded_table WHERE year = 1990
+17,Show average fossil share for the year 2010.,SELECT AVG(share_fossil) FROM uploaded_table WHERE year = 2010
+18,Show all records where fossil share is above 50.,"SELECT country , year , share_fossil FROM uploaded_table WHERE share_fossil > 50"
+19,Show all records where fossil share is below 20.,"SELECT country , year , share_fossil FROM uploaded_table WHERE share_fossil < 20"
+20,Show the highest fossil share for Brazil.,SELECT MAX(share_fossil) FROM uploaded_table WHERE country = 'Brazil'
+21,Show the lowest fossil share for India.,SELECT MIN(share_fossil) FROM uploaded_table WHERE country = 'India'
+22,Show the average fossil share for China.,SELECT AVG(share_fossil) FROM uploaded_table WHERE country = 'China'
+23,Show fossil share values for the USA for all years.,"SELECT country , year , share_fossil FROM uploaded_table WHERE country = 'United States'"
+24,Show fossil share values for India for all years.,"SELECT country , year , share_fossil FROM uploaded_table WHERE country = 'India'"
+25,Show fossil share values for China for all years.,"SELECT country , year , share_fossil FROM uploaded_table WHERE country = 'China'"
+26,Show fossil share values for Germany for all years.,"SELECT country , year , share_fossil FROM uploaded_table WHERE country = 'Germany'"
+27,Show fossil share values for Japan for all years.,"SELECT country , year , share_fossil FROM uploaded_table WHERE country = 'Japan'"
+28,Show the maximum fossil share recorded in the dataset.,SELECT MAX(share_fossil) FROM uploaded_table
+29,Show the minimum fossil share recorded in the dataset.,SELECT MIN(share_fossil) FROM uploaded_table
+30,Show the total sum of fossil share across the entire dataset.,SELECT SUM(share_fossil) FROM uploaded_table

@@ -1,330 +1,323 @@
-# app.py
+"""
+app.py
+
+Streamlit UI for SQL Copilot:
+
+- Upload CSV/Excel → converted into SQLite ('uploaded_data.db')
+- Show schema
+- Text box for natural language questions
+- Display generated SQL
+- Execute query safely and show results
+- Visualize query results
+- NEW: Separate section to explore & visualize the raw uploaded dataset
+"""
+
+import io
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import streamlit as st
 from dotenv import load_dotenv
+
+from data_utils import (
+    DEFAULT_DB_PATH,
+    create_db_from_dataframe,
+    get_schema,
+    run_safe_sql,
+)
+from main_sql_copilot import generate_sql_from_question
+
+# Make sure environment (GEMINI_API_KEY) is loaded
 load_dotenv()
 
-import os
-import io
-from typing import Optional
+# -------------------------------------------------------------------
+# Streamlit layout
+# -------------------------------------------------------------------
 
-import streamlit as st
-import pandas as pd
-import matplotlib.pyplot as plt
-import torch
-from transformers import T5Tokenizer, T5ForConditionalGeneration
-
-# Our helper module you saved as sql.py
-from sql import open_store
-
-
-# ===================== T5 NL → SQL helpers =====================
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODEL_DIR = os.path.join(BASE_DIR, "models", "t5-small-nl2sql")
-
-
-@st.cache_resource
-def load_t5_model():
-    """
-    Load the fine-tuned T5-small model once per Streamlit session.
-    Falls back gracefully if the model directory is missing.
-    """
-    if not os.path.isdir(MODEL_DIR):
-        st.warning(
-            f"Model directory not found at {MODEL_DIR}. "
-            "Make sure you ran 2_train_t5.py and the path is correct."
-        )
-        return None, None, torch.device("cpu")
-
-    tokenizer = T5Tokenizer.from_pretrained(MODEL_DIR)
-    model = T5ForConditionalGeneration.from_pretrained(MODEL_DIR)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    model.eval()
-    return tokenizer, model, device
-
-
-def clean_sql(sql: str) -> str:
-    """
-    Simple post-processing for model output:
-    - strip whitespace
-    - keep only up to the first ';'
-    - de-duplicate columns in the SELECT list, if we can detect them
-    """
-    if not sql:
-        return sql
-
-    sql = sql.strip()
-
-    # keep only the first statement (up to first ';')
-    if ";" in sql:
-        sql = sql.split(";", 1)[0] + ";"
-
-    lower_sql = sql.lower()
-    if not lower_sql.startswith("select"):
-        return sql
-
-    # Try to split on SELECT ... FROM ...
-    if " from " in lower_sql:
-        idx = lower_sql.index(" from ")
-        # len("select ") == 7, but we keep case as-is from original string
-        select_part = sql[7:idx].strip()
-        from_part = sql[idx:]  # includes " from ..."
-
-        cols = [c.strip() for c in select_part.split(",") if c.strip()]
-
-        dedup_cols = []
-        seen = set()
-        for c in cols:
-            key = c.lower()
-            if key not in seen:
-                seen.add(key)
-                dedup_cols.append(c)
-
-        select_clean = ", ".join(dedup_cols) if dedup_cols else select_part
-        return "SELECT " + select_clean + " " + from_part
-
-    return sql
-
-
-def generate_sql_from_nl(question: str, table_name: Optional[str] = None) -> str:
-    """
-    Use the fine-tuned T5-small model to turn natural language into SQL.
-    Optionally, include the active table name as a hint.
-    """
-    tokenizer, model, device = load_t5_model()
-    if tokenizer is None or model is None:
-        return ""
-
-    base_prefix = "translate English to SQL: "
-    question = question.strip()
-
-    if table_name:
-        full_input = f"{base_prefix}{question} [TABLE={table_name}]"
-    else:
-        full_input = base_prefix + question
-
-    inputs = tokenizer(
-        full_input,
-        return_tensors="pt",
-        padding="max_length",
-        max_length=64,
-        truncation=True,
-    ).to(device)
-
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_length=80,
-            num_beams=4,
-            early_stopping=True,
-        )
-
-    raw_sql = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return clean_sql(raw_sql)
-
-
-# ===================== SQL store & plotting helpers =====================
-
-def init_store():
-    """Create or load a SQLite store for uploaded data."""
-    if "store" not in st.session_state:
-        # DB file will live next to Code/ as uploaded_data.db
-        db_path = os.path.join(os.path.dirname(__file__), "uploaded_data.db")
-        st.session_state.store = open_store(db_path=db_path)
-    return st.session_state.store
-
-
-def is_numeric(s: pd.Series) -> bool:
-    return pd.api.types.is_numeric_dtype(s)
-
-
-def auto_plot(df: pd.DataFrame):
-    """Very simple plot chooser (matplotlib-only)."""
-    if df.empty or df.shape[1] == 0:
-        st.info("Nothing to plot.")
-        return
-
-    cols = list(df.columns)
-
-    # Prefer (categorical, numeric) bar chart
-    cat = next((c for c in cols if not is_numeric(df[c])), None)
-    num = next((c for c in cols if is_numeric(df[c])), None)
-
-    if cat is not None and num is not None:
-        fig, ax = plt.subplots()
-        grouped = df.groupby(cat)[num].sum().sort_values(ascending=False).head(30)
-        ax.bar(grouped.index.astype(str), grouped.values)
-        ax.set_xticklabels(grouped.index.astype(str), rotation=45, ha="right")
-        ax.set_xlabel(cat)
-        ax.set_ylabel(num)
-        ax.set_title(f"{num} by {cat}")
-        fig.tight_layout()
-        st.pyplot(fig)
-        return
-
-    # Else, if we have a numeric column, show histogram
-    numeric_cols = [c for c in cols if is_numeric(df[c])]
-    if numeric_cols:
-        col = numeric_cols[0]
-        fig, ax = plt.subplots()
-        ax.hist(df[col].dropna())
-        ax.set_xlabel(col)
-        ax.set_ylabel("Frequency")
-        ax.set_title(f"Distribution of {col}")
-        fig.tight_layout()
-        st.pyplot(fig)
-        return
-
-    # Else: simple value counts for first column
-    c0 = cols[0]
-    vc = df[c0].astype(str).value_counts().head(30)
-    fig, ax = plt.subplots()
-    ax.bar(range(len(vc.index)), vc.values)
-    ax.set_xticks(range(len(vc.index)))
-    ax.set_xticklabels(vc.index.astype(str), rotation=45, ha="right")
-    ax.set_title(f"{c0} — Value counts")
-    ax.set_xlabel(c0)
-    ax.set_ylabel("Count")
-    fig.tight_layout()
-    st.pyplot(fig)
-
-
-def get_sql_from_question(question: str, store, table_name: Optional[str]) -> str:
-    """
-    Wrapper that calls the local T5 model to generate SQL.
-    'store' is unused here but kept for API compatibility.
-    """
-    question = question.strip()
-    if not question:
-        return ""
-    sql_text = generate_sql_from_nl(question, table_name=table_name)
-    return sql_text
-
-
-# ===================== Streamlit UI =====================
-
-st.set_page_config(page_title="SQL Copilot — NL2SQL", layout="wide")
-st.title("SQL Copilot: Natural Language → SQL on Your Own Data")
-
-st.write(
-    "Upload a CSV or Excel file, let the app load it into SQLite, "
-    "and then ask questions in natural language. A fine-tuned T5-small "
-    "model generates SQL, which we run on your uploaded data."
+st.set_page_config(
+    page_title="SQL Copilot",
+    page_icon="🧠",
+    layout="wide",
 )
 
-store = init_store()
+st.title("🧠 SQL Copilot – Conversational SQL for Your Data")
 
-with st.sidebar:
-    st.header("1. Upload data")
-    uploaded = st.file_uploader("Upload CSV or Excel", type=["csv", "xlsx", "xls"])
+# -------------------------------------------------------------------
+# Sidebar: upload dataset
+# -------------------------------------------------------------------
 
-    table_created = None
-    if uploaded is not None:
-        name = uploaded.name
-        ext = os.path.splitext(name)[1].lower()
+st.sidebar.header("1. Upload Your Dataset")
 
-        try:
-            if ext == ".csv":
-                table_created = store.load_csv(uploaded, table_name=None, if_exists="replace")
-            elif ext in (".xlsx", ".xls"):
-                table_created = store.load_excel(uploaded, sheet=None, table_prefix=None, if_exists="replace")
-            else:
-                st.error("Unsupported file type.")
-        except Exception as e:
-            st.error(f"Failed to load file into SQLite: {e}")
+uploaded_file = st.sidebar.file_uploader(
+    "Upload a CSV or Excel file",
+    type=["csv", "xls", "xlsx"],
+)
 
-        if table_created:
-            st.success(f"Loaded data into table: `{table_created}`")
-            st.session_state.last_table = table_created
+table_name = "uploaded_table"
 
-    st.markdown("---")
-    st.header("2. Model info")
-    st.caption(
-        "- Model: `t5-small` fine-tuned on a custom NL→SQL dataset\n"
-        "- Backend: Hugging Face Transformers on CPU/GPU\n"
-        "- Training: 30 epochs, final train loss ≈ 0.84"
-    )
+if "db_ready" not in st.session_state:
+    st.session_state.db_ready = False
 
-# --- Main layout ---
-tables = store.list_tables()
-col_left, col_right = st.columns([1.2, 1.8])
+if uploaded_file is not None:
+    try:
+        # Read uploaded file into a DataFrame
+        file_bytes = uploaded_file.read()
+        buffer = io.BytesIO(file_bytes)
 
-with col_left:
-    st.subheader("Database schema")
-
-    if not tables:
-        st.info("No tables found yet. Upload a CSV/Excel file in the sidebar.")
-        table_name = None
-    else:
-        default_idx = 0
-        if "last_table" in st.session_state and st.session_state.last_table in tables:
-            default_idx = tables.index(st.session_state.last_table)
-
-        table_name = st.selectbox(
-            "Select a table to explore",
-            tables,
-            index=default_idx,
-        )
-
-        if table_name:
-            schema_rows = store.get_schema(table_name)
-            if schema_rows:
-                schema_df = pd.DataFrame(
-                    schema_rows,
-                    columns=["cid", "name", "type", "notnull", "dflt_value", "pk"],
-                )
-                st.dataframe(
-                    schema_df[["name", "type", "notnull", "pk"]],
-                    use_container_width=True,
-                )
-
-            with st.expander("Preview table data (first 100 rows)", expanded=False):
-                try:
-                    preview_df = store.run_select(f"SELECT * FROM {table_name} LIMIT 100;")
-                    st.dataframe(preview_df, use_container_width=True)
-                except Exception as e:
-                    st.error(f"Failed to preview table: {e}")
-
-with col_right:
-    st.subheader("Ask questions in natural language")
-
-    question = st.text_input(
-        "Example: *Show total revenue per product*",
-        value="",
-        placeholder="Type your question about the selected table...",
-    )
-
-    run_clicked = st.button("Generate SQL and run", type="primary", disabled=not tables)
-
-    if run_clicked:
-        if not tables:
-            st.warning("Please upload data and select a table first.")
-        elif not question.strip():
-            st.warning("Please enter a natural language question.")
+        if uploaded_file.name.lower().endswith(".csv"):
+            df = pd.read_csv(buffer)
         else:
-            if not 'table_name' in locals() or not table_name:
-                st.warning("Please select a table from the left panel.")
+            df = pd.read_excel(buffer)
+
+        # Save to SQLite
+        _, table_name = create_db_from_dataframe(
+            df=df,
+            table_name=table_name,
+            db_path=DEFAULT_DB_PATH,
+        )
+        st.session_state.db_ready = True
+
+        # Also keep the full DataFrame in session_state for raw visualization
+        st.session_state["uploaded_df"] = df
+
+        st.sidebar.success(f"Loaded into SQLite as table: {table_name}")
+
+        with st.expander("Preview uploaded data", expanded=False):
+            st.dataframe(df.head())
+
+    except Exception as e:
+        st.sidebar.error(f"Error loading file: {e}")
+        st.session_state.db_ready = False
+        st.session_state["uploaded_df"] = pd.DataFrame()
+
+# -------------------------------------------------------------------
+# Sidebar: show schema
+# -------------------------------------------------------------------
+
+st.sidebar.header("2. Database Schema")
+
+if st.session_state.db_ready:
+    schema = get_schema(db_path=DEFAULT_DB_PATH)
+    if not schema:
+        st.sidebar.warning("No tables detected in the database.")
+    else:
+        for table, cols in schema.items():
+            st.sidebar.markdown(f"**{table}**")
+            st.sidebar.write(", ".join(cols))
+else:
+    st.sidebar.info("Upload a dataset to initialize the database.")
+
+# -------------------------------------------------------------------
+# Section 3: NL-to-SQL interaction
+# -------------------------------------------------------------------
+
+st.header("3. Ask Questions in English")
+
+# Use session_state to allow proper clearing
+if "question" not in st.session_state:
+    st.session_state["question"] = ""
+
+question = st.text_input(
+    "Type a question about your data:",
+    placeholder="e.g., Show me total sales per year.",
+    key="question",
+)
+
+col_run, col_clear = st.columns([1, 1])
+
+with col_run:
+    run_button = st.button("Generate & Run SQL")
+with col_clear:
+    clear_button = st.button("Clear")
+
+# Clear button: reset the text input and rerun
+if clear_button:
+    st.session_state["question"] = ""
+    st.rerun()
+
+# -------------------------------------------------------------------
+# When user clicks "Generate & Run SQL"
+# -------------------------------------------------------------------
+
+if run_button:
+    if not st.session_state.db_ready:
+        st.error("Please upload a dataset first.")
+    elif not question.strip():
+        st.error("Please enter a question.")
+    else:
+        with st.spinner("Thinking with Gemini 2.5 Flash..."):
+            try:
+                sql_query, schema = generate_sql_from_question(
+                    question,
+                    db_path=DEFAULT_DB_PATH,
+                    few_shot_examples=None,  # plug in your own examples if you want
+                )
+            except Exception as e:
+                st.error(f"Error generating SQL: {e}")
+                sql_query = ""
+
+        if sql_query:
+            st.subheader("Generated SQL")
+            st.code(sql_query, language="sql")
+
+            # Execute the SQL safely
+            result_df, err_msg = run_safe_sql(sql_query, db_path=DEFAULT_DB_PATH)
+
+            if err_msg:
+                st.error(err_msg)
             else:
-                with st.spinner("Generating SQL with T5-small..."):
-                    sql_text = get_sql_from_question(question, store, table_name)
-
-                if not sql_text:
-                    st.error("The model did not return any SQL. Check that the model is saved correctly.")
+                st.subheader("Query Results")
+                if result_df.empty:
+                    st.info("Query executed successfully but returned no rows.")
                 else:
-                    st.markdown("**Generated SQL:**")
-                    st.code(sql_text, language="sql")
+                    st.dataframe(result_df)
 
-                    try:
-                        df_result = store.run_select(sql_text)
-                    except Exception as e:
-                        st.error(f"Database error while executing SQL: {e}")
-                    else:
-                        if df_result.empty:
-                            st.info("Query executed successfully but returned zero rows.")
+                    # -------------------------------------------------------------------
+                    # Visualization of QUERY RESULTS
+                    # -------------------------------------------------------------------
+                    st.subheader("Visualize Query Results (Optional)")
+
+                    plot_type = st.selectbox(
+                        "Choose a chart type for query results:",
+                        ["None", "Bar", "Line", "Scatter"],
+                        index=0,
+                        key="query_plot_type",
+                    )
+
+                    if plot_type != "None":
+                        numeric_cols = list(result_df.select_dtypes(include="number").columns)
+                        all_cols = list(result_df.columns)
+
+                        if not numeric_cols:
+                            st.warning("No numeric columns available for plotting.")
                         else:
-                            st.subheader("Query results")
-                            st.dataframe(df_result, use_container_width=True)
+                            x_col = st.selectbox(
+                                "X-axis column (query results):",
+                                all_cols,
+                                index=0,
+                                key="query_x_col",
+                            )
+                            y_col = st.selectbox(
+                                "Y-axis column (numeric):",
+                                numeric_cols,
+                                index=0,
+                                key="query_y_col",
+                            )
 
-                            if st.toggle("Plot result", value=False):
-                                auto_plot(df_result)
+                            if x_col and y_col:
+                                fig, ax = plt.subplots()
+                                if plot_type == "Bar":
+                                    ax.bar(result_df[x_col].astype(str), result_df[y_col])
+                                    ax.set_xlabel(x_col)
+                                    ax.set_ylabel(y_col)
+                                    ax.set_title(f"{plot_type} chart of {y_col} by {x_col}")
+                                    plt.xticks(rotation=45, ha="right")
+                                elif plot_type == "Line":
+                                    ax.plot(result_df[x_col], result_df[y_col])
+                                    ax.set_xlabel(x_col)
+                                    ax.set_ylabel(y_col)
+                                    ax.set_title(f"{plot_type} chart of {y_col} vs {x_col}")
+                                elif plot_type == "Scatter":
+                                    ax.scatter(result_df[x_col], result_df[y_col])
+                                    ax.set_xlabel(x_col)
+                                    ax.set_ylabel(y_col)
+                                    ax.set_title(f"{plot_type} plot of {y_col} vs {x_col}")
+
+                                st.pyplot(fig)
+
+# -------------------------------------------------------------------
+# Section 4: Explore & Visualize the RAW Uploaded Dataset
+# -------------------------------------------------------------------
+
+st.header("4. Explore & Visualize Uploaded Data")
+
+uploaded_df = st.session_state.get("uploaded_df", pd.DataFrame())
+
+if uploaded_df is None or uploaded_df.empty:
+    st.info("Upload a dataset in the sidebar to explore it here.")
+else:
+    st.subheader("Dataset Overview")
+
+    # Basic info
+    st.write(f"**Rows:** {uploaded_df.shape[0]} &nbsp;&nbsp; **Columns:** {uploaded_df.shape[1]}")
+
+    with st.expander("Show full column list and types", expanded=False):
+        col_info = pd.DataFrame(
+            {
+                "column": uploaded_df.columns,
+                "dtype": [str(t) for t in uploaded_df.dtypes],
+            }
+        )
+        st.dataframe(col_info)
+
+    with st.expander("Preview first rows", expanded=False):
+        st.dataframe(uploaded_df.head())
+
+    st.subheader("Create a Chart from Uploaded Data")
+
+    base_plot_type = st.selectbox(
+        "Choose a chart type for uploaded data:",
+        ["None", "Histogram", "Bar", "Line", "Scatter"],
+        index=0,
+        key="base_plot_type",
+    )
+
+    if base_plot_type != "None":
+        numeric_cols = list(uploaded_df.select_dtypes(include="number").columns)
+        all_cols = list(uploaded_df.columns)
+
+        if not numeric_cols:
+            st.warning("No numeric columns available for plotting.")
+        else:
+            if base_plot_type == "Histogram":
+                hist_col = st.selectbox(
+                    "Numeric column for histogram:",
+                    numeric_cols,
+                    index=0,
+                    key="hist_col",
+                )
+                bins = st.slider("Number of bins:", min_value=5, max_value=50, value=20)
+
+                fig, ax = plt.subplots()
+                ax.hist(uploaded_df[hist_col].dropna(), bins=bins)
+                ax.set_xlabel(hist_col)
+                ax.set_ylabel("Count")
+                ax.set_title(f"Histogram of {hist_col}")
+                st.pyplot(fig)
+
+            else:
+                x_col = st.selectbox(
+                    "X-axis column (uploaded data):",
+                    all_cols,
+                    index=0,
+                    key="base_x_col",
+                )
+                y_col = st.selectbox(
+                    "Y-axis column (numeric):",
+                    numeric_cols,
+                    index=0,
+                    key="base_y_col",
+                )
+
+                if x_col and y_col:
+                    fig, ax = plt.subplots()
+
+                    if base_plot_type == "Bar":
+                        ax.bar(uploaded_df[x_col].astype(str), uploaded_df[y_col])
+                        ax.set_xlabel(x_col)
+                        ax.set_ylabel(y_col)
+                        ax.set_title(f"{base_plot_type} chart of {y_col} by {x_col}")
+                        plt.xticks(rotation=45, ha="right")
+                    elif base_plot_type == "Line":
+                        ax.plot(uploaded_df[x_col], uploaded_df[y_col])
+                        ax.set_xlabel(x_col)
+                        ax.set_ylabel(y_col)
+                        ax.set_title(f"{base_plot_type} chart of {y_col} vs {x_col}")
+                    elif base_plot_type == "Scatter":
+                        ax.scatter(uploaded_df[x_col], uploaded_df[y_col])
+                        ax.set_xlabel(x_col)
+                        ax.set_ylabel(y_col)
+                        ax.set_title(f"{base_plot_type} plot of {y_col} vs {x_col}")
+
+                    st.pyplot(fig)

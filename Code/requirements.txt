@@ -1,8 +1,22 @@
+# Core
+pandas
+numpy
+matplotlib
+
+# Web app
 streamlit
-google-generativeai
 python-dotenv
-langchain
-PyPDF2
-chromadb
-faiss-cpu
-pdf2image
+
+# Excel support for pandas
+openpyxl
+
+# LLM: Gemini 2.5 Flash
+google-generativeai
+
+# ML / NLP stack (for your T5 + evaluation scripts)
+torch
+transformers
+datasets
+scikit-learn
+sentencepiece
+tqdm

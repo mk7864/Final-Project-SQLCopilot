@@ -35,10 +35,10 @@ Final-Project-SQLCopilot/
 │   ├── sql_canonicalizer.py        # SQL normalization for evaluation
 │   ├── evaluate_fossil_nl2sql.py   # Benchmarking script
 │   ├── requirements.txt            # Python dependencies
-│   └── uploaded_data.db            # Generated after uploading dataset (ignored in repo)
+│   └── uploaded_data.db            # Generated after uploading dataset
 │
 └── data/
-    └── nl2sql_full.csv             # Benchmark dataset
+    └── nl2sql_full.csv             # Benchmark dataset'''
 
 # 👉 Installation
 git clone https://github.com/mk7864/Final-Project-SQLCopilot.git

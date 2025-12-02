@@ -30,23 +30,32 @@ Final-Project-SQLCopilot/
 │
 ├── Code/
 │   ├── app.py                      # Streamlit UI
-│   ├── main_sql_copilot.py         # NL → SQL logic (Gemini)
+│   ├── main_sql_copilot.py         # NL → SQL logic using Gemini
 │   ├── data_utils.py               # DB + schema utilities
 │   ├── sql_canonicalizer.py        # SQL normalization for evaluation
-│   ├── evaluate_fossil_nl2sql.py   # Benchmarking module
-│   ├── requirements.txt            # Dependencies
-│   └── uploaded_data.db            # Generated after uploading dataset
+│   ├── evaluate_fossil_nl2sql.py   # Benchmarking script
+│   ├── requirements.txt            # Python dependencies
+│   └── uploaded_data.db            # Generated after uploading dataset (ignored in repo)
 │
 └── data/
-    └── nl2sql_full.csv             # Benchmark reference dataset
+    └── nl2sql_full.csv             # Benchmark dataset
 
-## ⚙️ Installation
-
-Clone the repo:
-
-```bash
+# 👉 Installation
 git clone https://github.com/mk7864/Final-Project-SQLCopilot.git
 cd Final-Project-SQLCopilot/Code
 pip install -r requirements.txt
 
-Create a `.env` file inside the Code folder:
+# 👉 Environment Setup
+# Create a .env file inside the Code folder
+echo GEMINI_API_KEY=YOUR_KEY_HERE > .env
+
+# 👉 Run Application
+cd Code
+streamlit run app.py
+# Then open browser: http://localhost:8501
+# Upload CSV → Ask SQL queries → View visualizations
+
+# 👉 Evaluate NL → SQL Performance
+cd Code
+python evaluate_fossil_nl2sql.py
+# This checks SQL accuracy using canonical SQL comparison

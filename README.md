@@ -48,3 +48,5 @@ Clone the repo:
 git clone https://github.com/mk7864/Final-Project-SQLCopilot.git
 cd Final-Project-SQLCopilot/Code
 pip install -r requirements.txt
+
+Create a `.env` file inside the Code folder:
